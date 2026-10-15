@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import * as U from './application/debtor.use-cases';
+import * as R from './application/contact-restriction.use-cases';
 import { DebtorQueries, DebtorRepository } from './domain/debtor.repository';
 import { DebtorContactPersonOrmEntity, DebtorOrmEntity } from './infrastructure/debtor.orm-entities';
 import { TypeOrmDebtorRepository } from './infrastructure/typeorm-debtor.repository';
@@ -18,6 +19,9 @@ import { DebtorsController } from './presentation/debtors.controller';
     U.SetDebtorActiveUseCase,
     U.GetDebtorLogoUseCase,
     U.DebtorQueriesUseCase,
+    R.ListContactRestrictionsUseCase,
+    R.AddContactRestrictionUseCase,
+    R.LiftContactRestrictionUseCase,
   ],
   exports: [DebtorRepository],
 })

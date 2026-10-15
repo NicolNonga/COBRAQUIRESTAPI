@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -19,6 +19,8 @@ class DebtorListQuery extends ListQueryDto {
 }
 import { assertFileType, IMAGE_TYPES, toBinary } from '@/shared/presentation/upload';
 import * as U from '../application/debtor.use-cases';
+import * as R from '../application/contact-restriction.use-cases';
+import { AddRestrictionDto, LiftRestrictionDto } from './dto/contact-restriction.dto';
 import { DebtorDto } from './dto/debtor.dto';
 import { RequirePermissions } from '@/modules/auth/presentation/require-permissions.decorator';
 import { P } from '@/modules/access-control/domain/permission-catalog';
@@ -40,6 +42,9 @@ export class DebtorsController {
     private readonly setActive: U.SetDebtorActiveUseCase,
     private readonly logo: U.GetDebtorLogoUseCase,
     private readonly queries: U.DebtorQueriesUseCase,
+    private readonly listRestrictions: R.ListContactRestrictionsUseCase,
+    private readonly addRestriction: R.AddContactRestrictionUseCase,
+    private readonly liftRestriction: R.LiftContactRestrictionUseCase,
     @InjectDataSource() private readonly ds: DataSource,
   ) {}
 
@@ -80,6 +85,29 @@ export class DebtorsController {
   @RequirePermissions(P.DEBTOR_VIEW)
   async dashboard() {
     return { data: await this.queries.dashboard() };
+  }
+
+  @Get('debtors/:debtorId/contact-restrictions')
+  @ApiOperation({ summary: 'Oposições a contacto do devedor (activas e levantadas)' })
+  @RequirePermissions(P.DEBTOR_VIEW)
+  async restrictions(@Param('debtorId', IdPipe) id: number) {
+    return { data: await this.listRestrictions.execute(id) };
+  }
+
+  @Post('debtors/:debtorId/contact-restrictions')
+  @ApiOperation({ summary: 'Registar que o devedor não quer ser contactado (EMAIL, SMS ou ALL). Efeito imediato.' })
+  @RequirePermissions(P.CONTACT_RESTRICTION_ADD)
+  async restrict(@CurrentUser() me: AuthenticatedUser, @Param('debtorId', IdPipe) id: number, @Body() dto: AddRestrictionDto) {
+    const r = await this.addRestriction.execute(me.id, id, dto);
+    return { message: 'Oposição registada. O devedor deixa de receber mensagens neste canal.', id: r.id };
+  }
+
+  @Delete('debtors/:debtorId/contact-restrictions/:restrictionId')
+  @ApiOperation({ summary: 'Levantar uma oposição (fica o histórico, com quem levantou e porquê)' })
+  @RequirePermissions(P.CONTACT_RESTRICTION_LIFT)
+  async lift(@CurrentUser() me: AuthenticatedUser, @Param('debtorId', IdPipe) id: number, @Param('restrictionId', IdPipe) rid: number, @Body() dto: LiftRestrictionDto) {
+    await this.liftRestriction.execute(me.id, id, rid, dto.reason);
+    return { message: 'Oposição levantada' };
   }
 
   @Get('debtors/:debtorId/debt')

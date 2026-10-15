@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Criteria, FilterOperator, Sort } from '@/shared/domain/criteria';
+import { Criteria, FilterOperator, Sort, VisibilityScope } from '@/shared/domain/criteria';
 import { ContactField, ContactRepository } from '../domain/process.repository';
 import { ContactStatus } from '../infrastructure/process.orm-entities';
 
@@ -14,6 +14,7 @@ export interface ContactHistoryQuery {
   page: number;
   perPage: number;
   sort?: Sort<ContactField>[];
+  scope: VisibilityScope;
 }
 
 /** Histórico de contactos (por processo ou por agente), do mais recente para o mais antigo. */
@@ -24,6 +25,7 @@ export class ContactHistoryUseCase {
   execute(q: ContactHistoryQuery) {
     return this.contacts.search(
       Criteria.for<ContactField>()
+        .visibleTo(q.scope)
         .add('processId', q.processId)
         .add('userId', q.userId)
         .add('contactTypeId', q.contactTypeId)

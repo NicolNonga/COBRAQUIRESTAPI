@@ -15,7 +15,7 @@ export class ResetPasswordDto {
   @ApiProperty({ minLength: 8 })
   @IsString()
   @MinLength(8)
-  @MaxLength(128)
+  @MaxLength(72) // limite do bcrypt
   @Matches(/(?=.*[A-Za-z])(?=.*\d)/, { message: 'A palavra-passe deve conter letras e números' })
   newPassword: string;
 }

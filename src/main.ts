@@ -26,7 +26,7 @@ async function bootstrap(): Promise<void> {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true, // remove campos não declarados nos DTOs (mass assignment)
-      forbidNonWhitelisted: false,
+      forbidNonWhitelisted: cfg.get<boolean>('REJECT_UNKNOWN_FIELDS', false),
       transform: true,
       transformOptions: { enableImplicitConversion: false },
     }),
@@ -34,22 +34,25 @@ async function bootstrap(): Promise<void> {
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   app.enableShutdownHooks(); // fecha pool de BD e termina jobs com graça (SIGTERM)
 
-  const swagger = new DocumentBuilder()
-    .setTitle('Cobra Aqui API')
-    .setDescription(
-      'API de gestão de cobranças. Todas as rotas exigem JWT (Bearer) excepto login e recuperação de palavra-passe. ' +
-        'Valores monetários trafegam como string decimal ("1234.50"). Operações financeiras aceitam/exigem o header Idempotency-Key.',
-    )
-    .setVersion('1.0.0')
-    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
-    .build();
-  SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swagger), {
-    swaggerOptions: { persistAuthorization: true, displayRequestDuration: true },
-  });
+  // a documentação lista toda a superfície da API: só se ligada de propósito em produção
+  if (cfg.get<boolean>('SWAGGER_ENABLED', false)) {
+    const swagger = new DocumentBuilder()
+      .setTitle('Cobra Aqui API')
+      .setDescription(
+        'API de gestão de cobranças. Todas as rotas exigem JWT (Bearer) excepto login e recuperação de palavra-passe. ' +
+          'Valores monetários trafegam como string decimal ("1234.50"). Operações financeiras aceitam/exigem o header Idempotency-Key.',
+      )
+      .setVersion('1.0.0')
+      .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
+      .build();
+    SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swagger), {
+      swaggerOptions: { persistAuthorization: true, displayRequestDuration: true },
+    });
+  }
 
   const port = cfg.get<number>('PORT', 3333);
   await app.listen(port, '0.0.0.0');
-  logger.log(`API em http://localhost:${port}/api — Swagger em /api/docs`, 'Bootstrap');
+  logger.log(`API em http://localhost:${port}/api — Swagger ${cfg.get<boolean>('SWAGGER_ENABLED', false) ? 'em /api/docs' : 'desligado'}`, 'Bootstrap');
 }
 
 void bootstrap();

@@ -21,12 +21,14 @@ import { CreateInvoiceDto, UpdateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceUseCase } from '../application/update-invoice.use-case';
 import { RequirePermissions } from '@/modules/auth/presentation/require-permissions.decorator';
 import { P } from '@/modules/access-control/domain/permission-catalog';
+import { resolveTeamScope } from '@/shared/application/team-scope';
 
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { collectAllPages } from '@/shared/application/export-all';
 import { activeFilters, entityName, exportUserName, pdfResponse, rangeLabel, yesNo } from '@/shared/presentation/pdf-export';
 import { invoicesPdf } from '@/modules/reports/application/list-pdfs';
+import { fromBody, fromParam, VisibleTo } from '@/modules/auth/presentation/visible-to.decorator';
 
 const MONEY = /^\d{1,16}(\.\d{1,2})?$/;
 
@@ -79,8 +81,8 @@ export class InvoicesController {
   @ApiOperation({ summary: 'Listar facturas com filtros dinâmicos', description: SORT_DOC })
   @ApiSort(INVOICE_SORTABLE, 'dueDate:asc')
   @RequirePermissions(P.INVOICE_VIEW)
-  index(@Query() q: InvoiceListQuery) {
-    return this.queries.list({ ...q, states: q.state, sort: parseSort(q.sort, INVOICE_SORTABLE) });
+  index(@CurrentUser() me: AuthenticatedUser, @Query() q: InvoiceListQuery) {
+    return this.queries.list({ ...q, scope: resolveTeamScope(me, P.AGENTS_VIEW_ALL), states: q.state, sort: parseSort(q.sort, INVOICE_SORTABLE) });
   }
 
   @Get('export/pdf')
@@ -88,7 +90,7 @@ export class InvoicesController {
   @RequirePermissions(P.INVOICE_VIEW)
   async exportPdf(@CurrentUser() me: AuthenticatedUser, @Query() q: InvoiceListQuery) {
     const sort = parseSort(q.sort, INVOICE_SORTABLE);
-    const all = await collectAllPages((page, perPage) => this.queries.list({ ...q, states: q.state, sort, page, perPage }));
+    const all = await collectAllPages((page, perPage) => this.queries.list({ ...q, scope: resolveTeamScope(me, P.AGENTS_VIEW_ALL), states: q.state, sort, page, perPage }));
     const filters = activeFilters([
       ['Pesquisa', q.search], ['Estado', q.state?.length ? q.state.map((x) => STATE_LABEL[x] ?? x).join(', ') : null],
       ['Devedor', await entityName(this.ds, 'debtors', q.debtorId)],
@@ -102,10 +104,11 @@ export class InvoicesController {
   @ApiOperation({ summary: 'Facturas vencidas (mesmos filtros)', description: SORT_DOC })
   @ApiSort(INVOICE_SORTABLE, 'dueDate:asc')
   @RequirePermissions(P.INVOICE_VIEW)
-  overdue(@Query() q: InvoiceListQuery) {
-    return this.queries.overdue({ ...q, sort: parseSort(q.sort, INVOICE_SORTABLE) });
+  overdue(@CurrentUser() me: AuthenticatedUser, @Query() q: InvoiceListQuery) {
+    return this.queries.overdue({ ...q, scope: resolveTeamScope(me, P.AGENTS_VIEW_ALL), sort: parseSort(q.sort, INVOICE_SORTABLE) });
   }
 
+  @VisibleTo('invoice', fromParam('id'))
   @Get(':id/document')
   @ApiOperation({ summary: 'Ver/descarregar o PDF da factura (?download=1 força o download)' })
   @RequirePermissions(P.INVOICE_VIEW)
@@ -116,6 +119,7 @@ export class InvoicesController {
     res.sendFile(f.path);
   }
 
+  @VisibleTo('invoice', fromParam('id'))
   @Post(':id/document')
   @HttpCode(200)
   @ApiConsumes('multipart/form-data')
@@ -129,6 +133,7 @@ export class InvoicesController {
     return { message: 'PDF anexado à factura' };
   }
 
+  @VisibleTo('invoice', fromParam('id'))
   @Put(':id')
   @ApiOperation({ summary: 'Editar factura (bloqueada se paga/cancelada/em disputa; em processo só o número muda)' })
   @RequirePermissions(P.INVOICE_UPDATE)

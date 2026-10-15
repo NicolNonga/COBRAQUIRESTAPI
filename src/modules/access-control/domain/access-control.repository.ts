@@ -41,10 +41,21 @@ export abstract class PermissionRepository {
   abstract listActive(): Promise<Permission[]>;
   /** slugs activos de um perfil activo — usado na autorização */
   abstract activeSlugsForRole(roleId: number): Promise<string[]>;
+  /** permissões efectivas = as do perfil (se activo) + as concedidas ao próprio utilizador */
+  abstract activeSlugsForUser(userId: number, roleId: number | null): Promise<string[]>;
 }
 
 export abstract class RolePermissionRepository {
   /** devolve false se a associação já existir */
   abstract attach(roleId: number, permissionId: number): Promise<boolean>;
   abstract detach(roleId: number, permissionId: number): Promise<boolean>;
+}
+
+/** Permissões dadas directamente a um utilizador, somadas às do perfil (nunca retiram). */
+export abstract class UserPermissionRepository {
+  abstract grantedSlugs(userId: number): Promise<string[]>;
+  /** substitui a lista; devolve o que entrou e o que saiu */
+  abstract replace(userId: number, slugs: string[], grantedById: number): Promise<{ added: string[]; removed: string[] }>;
+  /** slugs do catálogo que existem e estão activos */
+  abstract existingActive(slugs: string[]): Promise<string[]>;
 }

@@ -122,13 +122,15 @@ export class TypeOrmUserRepository extends BaseTypeOrmRepository implements User
   async findDetailedWithPermissions(id: number): Promise<(User & { permissions: string[] }) | null> {
     const user = await this.findById(id);
     if (!user) return null;
-    const perms: Array<{ slug: string }> = user.roleId
-      ? await this.manager.query(
-          `SELECT p.slug FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id AND p.is_active
-            WHERE rp.role_id = $1`,
-          [user.roleId],
-        )
-      : [];
+    const perms: Array<{ slug: string }> = await this.manager.query(
+      `SELECT p.slug FROM role_permissions rp
+         JOIN roles r ON r.id = rp.role_id AND r.is_active
+         JOIN permissions p ON p.id = rp.permission_id AND p.is_active
+        WHERE rp.role_id = $1
+       UNION
+       SELECT p.slug FROM user_permissions up JOIN permissions p ON p.id = up.permission_id AND p.is_active WHERE up.user_id = $2`,
+      [user.roleId ?? 0, id],
+    );
     return Object.assign(user, { permissions: perms.map((p) => p.slug) });
   }
 

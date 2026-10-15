@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PageRequest } from '@/shared/domain/pagination';
 import { ProcessStateCode } from '@/modules/catalogs/domain/state-catalog.port';
-import { Criteria, FilterOperator, Sort } from '@/shared/domain/criteria';
+import { Criteria, FilterOperator, Sort, VisibilityScope } from '@/shared/domain/criteria';
 import { ProcessField, ProcessQueries } from '../domain/process.repository';
 
 export interface ProcessSearch {
@@ -20,6 +20,8 @@ export interface ProcessSearch {
   lastContactStatuses?: string[];
   minContacts?: number;
   maxContacts?: number;
+  /** o que o utilizador pode ver (obrigatório: uma listagem sem âmbito mostraria tudo) */
+  scope: VisibilityScope;
 }
 
 @Injectable()
@@ -28,6 +30,7 @@ export class ProcessQueriesUseCase {
   list(f: ProcessSearch) {
     return this.q.search(
       Criteria.for<ProcessField>()
+        .visibleTo(f.scope)
         .add('state', f.states, FilterOperator.IN)
         .add('debtorId', f.debtorId)
         .add('assignedUserId', f.assignedUserId)

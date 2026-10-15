@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Criteria, FilterOperator, Sort } from '@/shared/domain/criteria';
+import { Criteria, FilterOperator, Sort, VisibilityScope } from '@/shared/domain/criteria';
 import { NotFoundError } from '@/shared/domain/errors';
 import { NegotiationField, NegotiationQueries } from '../domain/negotiation.repository';
 
@@ -16,6 +16,7 @@ export interface NegotiationSearch {
   maxTotal?: string;
   effectiveFrom?: string;
   effectiveTo?: string;
+  scope: VisibilityScope;
 }
 
 @Injectable()
@@ -25,6 +26,7 @@ export class NegotiationQueriesUseCase {
   list(f: NegotiationSearch) {
     return this.q.search(
       Criteria.for<NegotiationField>()
+        .visibleTo(f.scope)
         .add('status', f.statuses, FilterOperator.IN)
         .add('debtorId', f.debtorId)
         .add('createdById', f.createdById)

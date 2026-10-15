@@ -19,6 +19,16 @@ import { IdempotencyKeyOrmEntity } from './idempotency-key.orm-entity';
 
 const KEY_PATTERN = /^[A-Za-z0-9_\-:.]{8,100}$/;
 
+/**
+ * Impressão digital do pedido: método + caminho real (com :id e query) + corpo.
+ * Só o corpo não chega — a mesma chave com outro `:id` repetiria a resposta de outro recurso.
+ */
+export function requestFingerprint(req: { method: string; originalUrl?: string; url?: string; body?: unknown }): string {
+  return createHash('sha256')
+    .update(JSON.stringify([req.method, req.originalUrl ?? req.url ?? '', req.body ?? {}]))
+    .digest('hex');
+}
+
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
   constructor(
@@ -39,7 +49,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
     if (!KEY_PATTERN.test(key)) throw new BadRequestException('Idempotency-Key inválida');
 
     const scope = `${req.user?.id ?? 'anon'}:${req.method}:${req.route?.path ?? req.path}`;
-    const requestHash = createHash('sha256').update(JSON.stringify(req.body ?? {})).digest('hex');
+    const requestHash = requestFingerprint(req);
     const repo = this.dataSource.getRepository(IdempotencyKeyOrmEntity);
 
     // INSERT ... ON CONFLICT DO NOTHING: atómico — só UM pedido concorrente "ganha" a chave.

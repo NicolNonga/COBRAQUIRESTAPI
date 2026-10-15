@@ -1,3 +1,4 @@
+import { ContactRestrictions } from '@/shared/application/contact-restrictions.port';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NotificationPublisher } from '@/modules/notifications/domain/notification-publisher.port';
@@ -31,6 +32,7 @@ export class RunCollectionLaddersUseCase {
     private readonly uow: UnitOfWork,
     private readonly audit: AuditTrail,
     private readonly outbox: Outbox,
+    private readonly restrictions: ContactRestrictions,
     cfg: ConfigService,
   ) {
     this.catchUp = Number(cfg.get('LADDER_CATCHUP_DAYS', 2));
@@ -84,26 +86,31 @@ export class RunCollectionLaddersUseCase {
       await this.notifications.publish(items);
 
       // mensagens ao devedor (email / SMS) — também pela outbox, na mesma transacção
+      // Lei 22/11, art. 27.º: devedores que se opuseram não recebem mensagens nesse canal
+      const blocked = await this.restrictions.blocked(due.map((d) => d.debtorId));
+      let suppressed = 0;
       const debtorMessages: OutboxMessageInput<DebtorMessagePayload>[] = due.flatMap((d) => {
         if (!d.debtorMessageTemplate || (!sendsEmail(d.debtorChannel) && !sendsSms(d.debtorChannel))) return [];
+        const no = blocked.get(d.debtorId);
         const vars = templateVars(d);
         const base = { debtorId: d.debtorId, debtorName: d.debtorName, processId: d.processId, stepId: d.stepId, text: renderTemplate(d.debtorMessageTemplate, vars) };
         const out: OutboxMessageInput<DebtorMessagePayload>[] = [];
-        if (sendsEmail(d.debtorChannel) && d.debtorEmail) {
+        if (sendsEmail(d.debtorChannel) && d.debtorEmail && !no?.has('EMAIL')) {
           out.push({
             type: MessageTypes.DEBTOR_EMAIL,
             dedupKey: `ladder:${d.processId}:${d.stepId}:email`,
             payload: { ...base, to: d.debtorEmail, subject: renderTemplate(d.debtorSubject || 'Aviso de cobrança — {{processId}}', vars) },
           });
         }
-        if (sendsSms(d.debtorChannel) && d.debtorPhone) {
+        if (sendsSms(d.debtorChannel) && d.debtorPhone && !no?.has('SMS')) {
           out.push({ type: MessageTypes.DEBTOR_SMS, dedupKey: `ladder:${d.processId}:${d.stepId}:sms`, payload: { ...base, to: d.debtorPhone } });
         }
+        suppressed += (sendsEmail(d.debtorChannel) && d.debtorEmail ? 1 : 0) + (sendsSms(d.debtorChannel) && d.debtorPhone ? 1 : 0) - out.length;
         return out;
       });
       if (debtorMessages.length) await this.outbox.enqueueMany(debtorMessages);
 
-      const summary = { today, executed: due.length, notifications: items.length, debtorMessages: debtorMessages.length, limitExceeded: exceeded.length };
+      const summary = { today, executed: due.length, notifications: items.length, debtorMessages: debtorMessages.length, suppressedByOpposition: suppressed, limitExceeded: exceeded.length };
       await this.audit.record({ action: 'LADDER_STEPS_EXECUTED', entity: 'collection_ladder', payload: summary });
       this.logger.log(summary, 'Régua de cobrança executada');
       return summary;

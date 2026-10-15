@@ -19,6 +19,8 @@ export const P = {
   DEBTOR_CREATE: 'debtor_create_permission',
   DEBTOR_UPDATE: 'debtor_update_permission',
   DEBTOR_TOGGLE: 'debtor_toggle_permission',
+  CONTACT_RESTRICTION_ADD: 'contact_restriction_add_permission',
+  CONTACT_RESTRICTION_LIFT: 'contact_restriction_lift_permission',
 
   INVOICE_VIEW: 'invoice_view_permission',
   INVOICE_CREATE: 'invoice_create_permission',
@@ -27,6 +29,9 @@ export const P = {
   DISPUTE_VIEW: 'invoice_dispute_view_permission',
   DISPUTE_OPEN: 'invoice_dispute_open_permission',
   DISPUTE_RESOLVE: 'invoice_dispute_resolve_permission',
+
+  /** visibilidade: sem esta, o agente vê só o que é seu e o gestor o seu e o da equipa */
+  AGENTS_VIEW_ALL: 'agents_view_all_permission',
 
   PROCESS_VIEW: 'process_view_permission',
   PROCESS_ASSIGN: 'process_assign_permission',
@@ -63,6 +68,7 @@ export const P = {
   USER_UPDATE: 'user_update_permission',
   USER_TOGGLE: 'user_toggle_permission',
   USER_RESET_PASSWORD: 'user_reset_password_permission',
+  USER_PERMISSIONS_MANAGE: 'user_permissions_manage_permission',
   ROLE_VIEW: 'role_view_permission',
   ROLE_MANAGE: 'role_manage_permission',
 
@@ -108,6 +114,8 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   { group: 'Devedores', slug: P.DEBTOR_CREATE, name: 'Criar devedores', description: 'Registar novos devedores, individualmente ou por importação de Excel.', defaultRoles: [GESTOR] },
   { group: 'Devedores', slug: P.DEBTOR_UPDATE, name: 'Editar devedores', description: 'Alterar os dados de um devedor (contactos, morada, credor, logótipo).', defaultRoles: [GESTOR] },
   { group: 'Devedores', slug: P.DEBTOR_TOGGLE, name: 'Activar ou desactivar devedores', description: 'Suspender um devedor ou voltar a activá-lo.', defaultRoles: [GESTOR] },
+  { group: 'Devedores', slug: P.CONTACT_RESTRICTION_ADD, name: 'Registar oposição a contacto', description: 'Marcar que o devedor não quer ser contactado por email ou SMS (Lei 22/11, art. 27.º). Aplica-se logo à régua e ao envio.', defaultRoles: ALL },
+  { group: 'Devedores', slug: P.CONTACT_RESTRICTION_LIFT, name: 'Levantar oposição a contacto', description: 'Voltar a permitir o contacto num canal, com motivo registado (por exemplo, novo consentimento do devedor).', defaultRoles: [GESTOR] },
 
   // Facturas
   { group: 'Facturas', slug: P.INVOICE_VIEW, name: 'Ver facturas', description: 'Consultar facturas, incluindo as vencidas.', defaultRoles: ALL },
@@ -118,6 +126,7 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   { group: 'Facturas', slug: P.DISPUTE_RESOLVE, name: 'Resolver disputas', description: 'Decidir uma disputa: dar razão ao devedor ou manter a cobrança.' },
 
   // Processos
+  { group: 'Processos', slug: P.AGENTS_VIEW_ALL, name: 'Ver dados de todos os agentes', description: 'Ver os processos, facturas, negociações, contactos e carteiras de todos os agentes. Sem esta permissão, o agente vê só o seu e o gestor o seu e o da sua equipa.' },
   { group: 'Processos', slug: P.PROCESS_VIEW, name: 'Ver processos', description: 'Consultar processos de cobrança, as suas facturas e o histórico de contactos.', defaultRoles: ALL },
   { group: 'Processos', slug: P.PROCESS_ASSIGN, name: 'Atribuir e transferir processos', description: 'Atribuir processos a agentes (manual ou automaticamente), transferi-los e gerar novos processos.', defaultRoles: [GESTOR] },
   { group: 'Processos', slug: P.PROCESS_INVOICE_REMOVE, name: 'Retirar facturas de processos', description: 'Remover facturas de um processo de cobrança.', defaultRoles: [GESTOR] },
@@ -159,6 +168,7 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   { group: 'Utilizadores e acessos', slug: P.USER_CREATE, name: 'Criar utilizadores', description: 'Convidar novos utilizadores e definir o seu perfil.' },
   { group: 'Utilizadores e acessos', slug: P.USER_UPDATE, name: 'Editar utilizadores', description: 'Alterar dados, perfil, gestor e categoria de um utilizador.' },
   { group: 'Utilizadores e acessos', slug: P.USER_TOGGLE, name: 'Activar ou desactivar utilizadores', description: 'Bloquear ou desbloquear o acesso de um utilizador.' },
+  { group: 'Utilizadores e acessos', slug: P.USER_PERMISSIONS_MANAGE, name: 'Gerir permissões individuais', description: 'Dar a um utilizador permissões além das do seu perfil. Só se pode dar o que se tem.' },
   { group: 'Utilizadores e acessos', slug: P.USER_RESET_PASSWORD, name: 'Redefinir palavra-passe', description: 'Gerar uma nova palavra-passe para outro utilizador.' },
   { group: 'Utilizadores e acessos', slug: P.ROLE_VIEW, name: 'Ver perfis e permissões', description: 'Consultar os perfis e o que cada um pode fazer.' },
   { group: 'Utilizadores e acessos', slug: P.ROLE_MANAGE, name: 'Gerir perfis', description: 'Criar e editar perfis e escolher as permissões de cada um.' },

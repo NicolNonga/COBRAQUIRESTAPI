@@ -4,6 +4,7 @@ import { DataSource } from 'typeorm';
 import { BaseTypeOrmRepository } from '@/infrastructure/database/base.repository';
 import { CriteriaCompiler } from '@/infrastructure/database/criteria/criteria-compiler';
 import { applyCriteria } from '@/infrastructure/database/criteria/query-builder.adapter';
+import { processVisibleSql, scopeValue } from '@/infrastructure/database/visibility.sql';
 import { Criteria } from '@/shared/domain/criteria';
 import { buildPage, Page } from '@/shared/domain/pagination';
 import { ContactField, ContactRepository, NewContact } from '../domain/process.repository';
@@ -54,6 +55,9 @@ export class TypeOrmContactRepository extends BaseTypeOrmRepository implements C
       .leftJoinAndSelect('c.contactType', 'contactType')
       .leftJoin('c.user', 'agent')
       .addSelect(['agent.id', 'agent.fullName', 'agent.email']);
+    if (criteria.scope && criteria.scope.kind !== 'ALL') {
+      qb.andWhere(processVisibleSql('c.process_id', criteria.scope, ':visUser'), { visUser: scopeValue(criteria.scope) });
+    }
     const [rows, total] = await applyCriteria(qb, CONTACT_FIELDS, criteria, 'c.id').getManyAndCount();
     return buildPage(rows, total, { page: criteria.page, perPage: criteria.perPage });
   }

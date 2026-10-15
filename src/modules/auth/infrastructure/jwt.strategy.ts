@@ -18,6 +18,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ignoreExpiration: false,
       secretOrKey: cfg.getOrThrow<string>('JWT_SECRET'),
       algorithms: ['HS256'],
+      issuer: cfg.get<string>('JWT_ISSUER', 'cobraqui-api'),
+      audience: cfg.get<string>('JWT_AUDIENCE', 'cobraqui-app'),
     });
   }
 
@@ -28,7 +30,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: AccessTokenPayload): Promise<AuthenticatedUser> {
     const snap = await this.users.findAuthSnapshot(payload.sub);
     if (!snap || !snap.isActive || snap.tokenVersion !== payload.tv) throw new UnauthorizedError('Sessão inválida ou expirada');
-    const permissions = snap.roleId && snap.roleActive ? await this.perms.activeSlugsForRole(snap.roleId) : [];
+    // perfil (se activo) + o que foi dado a este utilizador em particular
+    const permissions = await this.perms.activeSlugsForUser(snap.id, snap.roleId && snap.roleActive ? snap.roleId : null);
     RequestContext.setUser(snap.id);
     return {
       id: snap.id,

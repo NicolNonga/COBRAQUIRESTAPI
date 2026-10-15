@@ -18,7 +18,8 @@ class UserListQuery extends ListQueryDto {
 }
 import { CreateUserUseCase } from '../application/create-user.use-case';
 import * as U from '../application/user-management.use-cases';
-import { ChangePasswordDto, CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { GetUserPermissionsUseCase, SetUserPermissionsUseCase } from '../application/user-permissions.use-cases';
+import { ChangePasswordDto, CreateUserDto, SetUserPermissionsDto, UpdateUserDto } from './dto/user.dto';
 import { RequirePermissions } from '@/modules/auth/presentation/require-permissions.decorator';
 import { P } from '@/modules/access-control/domain/permission-catalog';
 
@@ -33,6 +34,8 @@ export class UsersController {
     private readonly adminReset: U.AdminResetPasswordUseCase,
     private readonly changeOwn: U.ChangeOwnPasswordUseCase,
     private readonly queries: U.UserQueriesUseCase,
+    private readonly getPermissions: GetUserPermissionsUseCase,
+    private readonly setPermissions: SetUserPermissionsUseCase,
   ) {}
 
   @Post()
@@ -72,6 +75,21 @@ export class UsersController {
   async changePassword(@CurrentUser() me: AuthenticatedUser, @Body() dto: ChangePasswordDto) {
     await this.changeOwn.execute(me.id, dto.currentPassword, dto.newPassword);
     return { message: 'Palavra-passe actualizada. Inicie sessão novamente.' };
+  }
+
+  @Get(':userId/permissions')
+  @ApiOperation({ summary: 'Permissões do utilizador: as do perfil e as dadas só a ele' })
+  @RequirePermissions(P.USER_VIEW)
+  async permissions(@Param('userId', IdPipe) id: number) {
+    return { data: await this.getPermissions.execute(id) };
+  }
+
+  @Put(':userId/permissions')
+  @ApiOperation({ summary: 'Definir as permissões individuais do utilizador (somam-se às do perfil; só se dá o que se tem)' })
+  @RequirePermissions(P.USER_PERMISSIONS_MANAGE)
+  async updatePermissions(@CurrentUser() me: AuthenticatedUser, @Param('userId', IdPipe) id: number, @Body() dto: SetUserPermissionsDto) {
+    const r = await this.setPermissions.execute(me, id, dto.permissions);
+    return { message: 'Permissões do utilizador actualizadas', data: r };
   }
 
   @Put(':userId/desable')

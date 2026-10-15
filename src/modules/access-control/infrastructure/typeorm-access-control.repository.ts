@@ -9,6 +9,7 @@ import {
   Role,
   RolePermissionRepository,
   RoleRepository,
+  UserPermissionRepository,
 } from '../domain/access-control.repository';
 import { PermissionOrmEntity, RoleOrmEntity } from './access-control.orm-entities';
 
@@ -112,6 +113,21 @@ export class TypeOrmPermissionRepository extends BaseTypeOrmRepository implement
     return rows.map((r) => r.slug);
   }
 
+  async activeSlugsForUser(userId: number, roleId: number | null): Promise<string[]> {
+    const rows: Array<{ slug: string }> = await this.manager.query(
+      `SELECT p.slug FROM role_permissions rp
+         JOIN roles r ON r.id = rp.role_id AND r.is_active
+         JOIN permissions p ON p.id = rp.permission_id AND p.is_active
+        WHERE rp.role_id = $1
+       UNION
+       SELECT p.slug FROM user_permissions up
+         JOIN permissions p ON p.id = up.permission_id AND p.is_active
+        WHERE up.user_id = $2`,
+      [roleId ?? 0, userId],
+    );
+    return rows.map((r) => r.slug);
+  }
+
   /** INSERT … ON CONFLICT DO NOTHING: idempotente e livre de race condition. */
   async attach(roleId: number, permissionId: number): Promise<boolean> {
     const rows: unknown[] = await this.manager.query(
@@ -132,5 +148,44 @@ export class TypeOrmPermissionRepository extends BaseTypeOrmRepository implement
 
   async idsExist(ids: number[]): Promise<boolean> {
     return (await this.repo(PermissionOrmEntity).countBy({ id: In(ids) })) === ids.length;
+  }
+}
+
+@Injectable()
+export class TypeOrmUserPermissionRepository extends BaseTypeOrmRepository implements UserPermissionRepository {
+  constructor(@InjectDataSource() ds: DataSource) {
+    super(ds);
+  }
+
+  async grantedSlugs(userId: number): Promise<string[]> {
+    const rows: Array<{ slug: string }> = await this.manager.query(
+      `SELECT p.slug FROM user_permissions up JOIN permissions p ON p.id = up.permission_id AND p.is_active WHERE up.user_id = $1 ORDER BY p.slug`,
+      [userId],
+    );
+    return rows.map((r) => r.slug);
+  }
+
+  async existingActive(slugs: string[]): Promise<string[]> {
+    if (!slugs.length) return [];
+    const rows: Array<{ slug: string }> = await this.manager.query('SELECT slug FROM permissions WHERE is_active AND slug = ANY($1)', [slugs]);
+    return rows.map((r) => r.slug);
+  }
+
+  async replace(userId: number, slugs: string[], grantedById: number): Promise<{ added: string[]; removed: string[] }> {
+    const before = new Set(await this.grantedSlugs(userId));
+    const want = new Set(slugs);
+    const removed = [...before].filter((s) => !want.has(s));
+    const added = [...want].filter((s) => !before.has(s));
+    if (removed.length) {
+      await this.manager.query('DELETE FROM user_permissions WHERE user_id = $1 AND permission_id IN (SELECT id FROM permissions WHERE slug = ANY($2))', [userId, removed]);
+    }
+    if (added.length) {
+      await this.manager.query(
+        `INSERT INTO user_permissions (user_id, permission_id, granted_by_id)
+         SELECT $1, p.id, $3 FROM permissions p WHERE p.slug = ANY($2) ON CONFLICT DO NOTHING`,
+        [userId, added, grantedById],
+      );
+    }
+    return { added, removed };
   }
 }

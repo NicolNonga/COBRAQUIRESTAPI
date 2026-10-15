@@ -24,6 +24,7 @@ import {
   ProcessInvoiceOrmEntity,
   ProcessOrmEntity,
 } from './process.orm-entities';
+import { processVisibleSql, scopeValue } from '@/infrastructure/database/visibility.sql';
 import { InvoiceOrmEntity } from '@/modules/invoices/infrastructure/invoice.orm-entity';
 
 const PROCESS_FIELDS = new CriteriaCompiler<ProcessField>({
@@ -293,6 +294,9 @@ export class TypeOrmProcessRepository
       .leftJoinAndSelect('p.assignment', 'assignment') // 1:1 (ux_process_assignments_process)
       .leftJoin('assignment.user', 'assignee')
       .addSelect(['assignee.id', 'assignee.fullName', 'assignee.email']);
+    if (criteria.scope && criteria.scope.kind !== 'ALL') {
+      qb.andWhere(processVisibleSql('p.id', criteria.scope, ':visUser'), { visUser: scopeValue(criteria.scope) });
+    }
     const [rows, total] = await applyCriteria(qb, PROCESS_FIELDS, criteria, 'p.id').getManyAndCount();
     const links = rows.length
       ? await this.repo(ProcessInvoiceOrmEntity).find({

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { negotiationVisibleSql, scopeValue } from '@/infrastructure/database/visibility.sql';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, In } from 'typeorm';
 import { BaseTypeOrmRepository } from '@/infrastructure/database/base.repository';
@@ -278,6 +279,11 @@ export class TypeOrmNegotiationRepository extends BaseTypeOrmRepository implemen
    */
   async search(criteria: Criteria<NegotiationField>): Promise<Page<NegotiationListItem>> {
     const c = NEGOTIATION_FIELDS.compile(criteria);
+    // âmbito do utilizador: um parâmetro a mais depois dos filtros (LIMIT/OFFSET passam a vir depois dele)
+    const scope = criteria.scope && criteria.scope.kind !== 'ALL' ? criteria.scope : null;
+    const visParam = c.params.length + 1;
+    const visible = scope ? ` AND ${negotiationVisibleSql('n.id', 'n.created_by_id', scope, `$${visParam}`)}` : '';
+    const base = scope ? [...c.params, scopeValue(scope)] : c.params;
     const rows = await this.manager.query(
       `SELECT n.id, n.status, n.debt_amount AS "debtAmount", n.total_amount AS "totalAmount", n.final_amount AS "finalAmount",
               n.discount_rate AS "discountRate", n.is_installment AS "isInstallment",
@@ -288,14 +294,14 @@ export class TypeOrmNegotiationRepository extends BaseTypeOrmRepository implemen
               CASE WHEN fd.id IS NULL THEN NULL ELSE json_build_object('id', fd.id, 'name', fd.name, 'nif', fd.nif) END AS debtor
          FROM negotiations n
          ${FIRST_DEBTOR_JOIN}
-        WHERE ${c.where}
+        WHERE ${c.where}${visible}
         ORDER BY ${c.orderBy}, n.id DESC
-        LIMIT $${c.params.length + 1} OFFSET $${c.params.length + 2}`,
-      [...c.params, c.limit, c.offset],
+        LIMIT $${base.length + 1} OFFSET $${base.length + 2}`,
+      [...base, c.limit, c.offset],
     );
     const [{ total }] = await this.manager.query(
-      `SELECT count(*)::int AS total FROM negotiations n ${FIRST_DEBTOR_JOIN} WHERE ${c.where}`,
-      c.params,
+      `SELECT count(*)::int AS total FROM negotiations n ${FIRST_DEBTOR_JOIN} WHERE ${c.where}${visible}`,
+      base,
     );
     return buildPage(rows, total, { page: criteria.page, perPage: criteria.perPage });
   }

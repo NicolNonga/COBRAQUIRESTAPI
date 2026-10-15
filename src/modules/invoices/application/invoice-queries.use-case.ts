@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InvoiceStateCode } from '@/modules/catalogs/domain/state-catalog.port';
-import { Criteria, FilterOperator, Sort } from '@/shared/domain/criteria';
+import { Criteria, FilterOperator, Sort, VisibilityScope } from '@/shared/domain/criteria';
 import { InvoiceField, InvoiceQueries } from '../domain/invoice.repository';
 
 export interface InvoiceSearch {
@@ -18,6 +18,7 @@ export interface InvoiceSearch {
   issueDateFrom?: string;
   issueDateTo?: string;
   inProcess?: boolean;
+  scope: VisibilityScope;
 }
 
 @Injectable()
@@ -26,6 +27,7 @@ export class InvoiceQueriesUseCase {
 
   list(f: InvoiceSearch) {
     const criteria = Criteria.for<InvoiceField>()
+      .visibleTo(f.scope)
       .add('state', f.states, FilterOperator.IN)
       .add('debtorId', f.debtorId, FilterOperator.EQUAL)
       .add('currencyId', f.currencyId, FilterOperator.EQUAL)

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsEmail, IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
 
 export class CreateUserDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200) fullName?: string | null;
@@ -20,12 +20,21 @@ export class UpdateUserDto {
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) categorie_id?: number;
 }
 
+export class SetUserPermissionsDto {
+  @ApiProperty({ type: [String], description: 'Permissões dadas só a este utilizador (somam-se às do perfil). Lista vazia = nenhuma.' })
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
+  permissions: string[];
+}
+
 export class ChangePasswordDto {
   @ApiProperty() @IsString() currentPassword: string;
   @ApiProperty({ minLength: 8 })
   @IsString()
   @MinLength(8)
-  @MaxLength(128)
+  @MaxLength(72) // limite do bcrypt
   @Matches(/(?=.*[A-Za-z])(?=.*\d)/, { message: 'A palavra-passe deve conter letras e números' })
   newPassword: string;
 }

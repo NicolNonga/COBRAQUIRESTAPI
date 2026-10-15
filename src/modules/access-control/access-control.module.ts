@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import * as P from './application/permission.use-cases';
 import * as R from './application/role.use-cases';
-import { PermissionRepository, RolePermissionRepository, RoleRepository } from './domain/access-control.repository';
+import { PermissionRepository, RolePermissionRepository, RoleRepository, UserPermissionRepository } from './domain/access-control.repository';
 import { PermissionOrmEntity, RoleOrmEntity } from './infrastructure/access-control.orm-entities';
-import { TypeOrmPermissionRepository, TypeOrmRoleRepository } from './infrastructure/typeorm-access-control.repository';
+import { TypeOrmPermissionRepository, TypeOrmRoleRepository, TypeOrmUserPermissionRepository } from './infrastructure/typeorm-access-control.repository';
 import { PermissionCatalogBootstrap } from './infrastructure/permission-catalog.bootstrap';
 import { PermissionsController, RolePermissionsController, RolesController } from './presentation/access-control.controller';
 
@@ -16,6 +16,7 @@ import { PermissionsController, RolePermissionsController, RolesController } fro
     TypeOrmPermissionRepository,
     { provide: PermissionRepository, useExisting: TypeOrmPermissionRepository },
     { provide: RolePermissionRepository, useExisting: TypeOrmPermissionRepository },
+    { provide: UserPermissionRepository, useClass: TypeOrmUserPermissionRepository },
     R.CreateRoleUseCase,
     R.UpdateRoleUseCase,
     R.SetRoleActiveUseCase,
@@ -25,6 +26,6 @@ import { PermissionsController, RolePermissionsController, RolesController } fro
     P.AttachPermissionToRoleUseCase,
     P.DetachPermissionFromRoleUseCase,
   ],
-  exports: [RoleRepository, PermissionRepository],
+  exports: [RoleRepository, PermissionRepository, UserPermissionRepository],
 })
 export class AccessControlModule {}

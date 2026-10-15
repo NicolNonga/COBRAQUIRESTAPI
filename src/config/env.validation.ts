@@ -25,8 +25,19 @@ export const envValidationSchema = Joi.object({
   DB_SSL_CA: Joi.string().allow('').default(''),
   DB_LOG_SLOW_QUERY_MS: Joi.number().integer().min(1).default(500),
 
-  JWT_SECRET: Joi.string().min(32).required(),
+  // em produção recusa-se o valor de exemplo do .env.example
+  JWT_SECRET: Joi.string().min(32).required().when('NODE_ENV', { is: 'production', then: Joi.string().invalid('troque-isto-por-um-segredo-com-pelo-menos-32-caracteres') }),
   JWT_EXPIRES_IN: Joi.string().default('1h'),
+  // quem emite e a quem se destina o token: um JWT assinado com o mesmo segredo para outro fim é recusado
+  JWT_ISSUER: Joi.string().default('cobraqui-api'),
+  JWT_AUDIENCE: Joi.string().default('cobraqui-app'),
+  // bloqueio de conta contra credential stuffing: N falhas seguidas bloqueiam o email durante M minutos
+  LOGIN_MAX_FAILURES: Joi.number().integer().min(3).max(20).default(5),
+  LOGIN_LOCK_MINUTES: Joi.number().integer().min(1).max(1440).default(15),
+  // documentação interactiva: desligada por omissão em produção
+  SWAGGER_ENABLED: Joi.boolean().when('NODE_ENV', { is: 'production', then: Joi.boolean().default(false), otherwise: Joi.boolean().default(true) }),
+  // rejeitar (400) campos não declarados nos DTOs em vez de os descartar em silêncio
+  REJECT_UNKNOWN_FIELDS: Joi.boolean().default(false),
   // cookie de sessão (HttpOnly). Secure obrigatório em produção; SameSite=none só com frontend noutro domínio
   AUTH_COOKIE_SECURE: Joi.boolean().when('NODE_ENV', { is: 'production', then: Joi.boolean().valid(true).default(true), otherwise: Joi.boolean().default(false) }),
   AUTH_COOKIE_SAMESITE: Joi.string().valid('lax', 'strict', 'none').default('lax'),

@@ -48,7 +48,12 @@ export interface Sort<F extends string = string> {
   direction: SortDirection;
 }
 
+/** Quem pode ver o quê: tudo, a equipa de um gestor, ou só o que é de um utilizador. */
+export type VisibilityScope = { kind: 'ALL' } | { kind: 'TEAM'; managerId: number } | { kind: 'SELF'; userId: number };
+
 export interface Criteria<F extends string = string> {
+  /** limita os resultados ao que o utilizador pode ver (aplicado pelo repositório do recurso) */
+  scope?: VisibilityScope;
   filters: Filter<F>[];
   anyOf: AnyOfFilter<F>[];
   sorts: Sort<F>[];
@@ -65,6 +70,13 @@ export class CriteriaBuilder<F extends string> {
   private sorts: Sort<F>[] = [];
   private page = 1;
   private perPage = 10;
+  private scope?: VisibilityScope;
+
+  /** O que o utilizador pode ver. Obrigatório nas listagens de processos, facturas, negociações e contactos. */
+  visibleTo(scope: VisibilityScope | undefined): this {
+    this.scope = scope;
+    return this;
+  }
 
   add(field: F, value: unknown, operator: FilterOperator = FilterOperator.EQUAL): this {
     if (!isEmpty(value)) this.filters.push({ field, operator, value: typeof value === 'string' ? value.trim() : value });
@@ -93,7 +105,7 @@ export class CriteriaBuilder<F extends string> {
   }
 
   build(): Criteria<F> {
-    return { filters: [...this.filters], anyOf: [...this.anyOfs], sorts: [...this.sorts], page: this.page, perPage: this.perPage };
+    return { scope: this.scope, filters: [...this.filters], anyOf: [...this.anyOfs], sorts: [...this.sorts], page: this.page, perPage: this.perPage };
   }
 }
 

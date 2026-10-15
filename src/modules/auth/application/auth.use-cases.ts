@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PermissionRepository } from '@/modules/access-control/domain/access-control.repository';
 import { UserRepository } from '@/modules/users/domain/user.repository';
@@ -9,6 +9,7 @@ import { PasswordHasher } from '@/shared/application/password-hasher.port';
 import { RequestContext } from '@/shared/application/request-context';
 import { UnitOfWork } from '@/shared/application/unit-of-work.port';
 import { BusinessRuleError, UnauthorizedError } from '@/shared/domain/errors';
+import { LoginAttemptRepository } from '../domain/login-attempt.repository';
 import { PasswordResetTokenRepository } from '../domain/password-reset-token.repository';
 import { TokenIssuer } from './token-issuer.port';
 
@@ -26,21 +27,40 @@ export class LoginUseCase {
     private readonly hasher: PasswordHasher,
     private readonly tokens: TokenIssuer,
     private readonly audit: AuditTrail,
+    private readonly attempts: LoginAttemptRepository,
+    private readonly cfg: ConfigService,
   ) {}
 
   async execute(email: string, password: string) {
+    const key = sha256(email.trim().toLowerCase());
+    const locked = await this.attempts.lock(key);
+    if (locked.minutesLeft > 0) {
+      this.logger.warn({ ip: RequestContext.get()?.ip }, 'Login recusado: conta temporariamente bloqueada');
+      throw this.tooMany(locked.minutesLeft);
+    }
     const creds = await this.users.findCredentialsByEmail(email);
     const valid = await this.hasher.verify(creds?.passwordHash ?? DUMMY_HASH, password);
     if (!creds || !valid || !creds.isActive) {
-      this.logger.warn({ email, ip: RequestContext.get()?.ip }, 'Tentativa de login falhada');
+      this.logger.warn({ ip: RequestContext.get()?.ip }, 'Tentativa de login falhada');
+      // conta-se também para emails que não existem: o bloqueio não revela que contas existem
+      const after = await this.attempts.recordFailure(key, this.cfg.get<number>('LOGIN_MAX_FAILURES', 5), this.cfg.get<number>('LOGIN_LOCK_MINUTES', 15));
+      if (after.minutesLeft > 0) throw this.tooMany(after.minutesLeft);
       throw new UnauthorizedError('Email ou palavra-passe inválidos'); // mesma mensagem para todos os casos
     }
+    await this.attempts.clear(key);
     const user = await this.users.findById(creds.id);
-    const permissions = user?.roleId && user.role?.isActive ? await this.perms.activeSlugsForRole(user.roleId) : [];
+    const permissions = await this.perms.activeSlugsForUser(creds.id, user?.roleId && user.role?.isActive ? user.roleId : null);
     const access = await this.tokens.issue({ sub: creds.id, tv: creds.tokenVersion });
     RequestContext.setUser(creds.id);
     await this.audit.record({ action: 'USER_LOGIN', entity: 'user', entityId: creds.id });
     return { token: { type: 'bearer', ...access }, user: { ...user, permissions } };
+  }
+
+  private tooMany(minutes: number): HttpException {
+    return new HttpException(
+      { code: 'TOO_MANY_ATTEMPTS', message: `Demasiadas tentativas falhadas. Tente novamente dentro de ${minutes} minuto(s) ou recupere a palavra-passe.` },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
 }
 

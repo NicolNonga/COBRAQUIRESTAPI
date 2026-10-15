@@ -57,11 +57,13 @@ import { TransferProcessesUseCase } from '../application/transfer-processes.use-
 import { AssignProcessDto, CreateContactDto, RemoveInvoicesDto, TransferProcessesDto } from './dto/process.dto';
 import { RequirePermissions } from '@/modules/auth/presentation/require-permissions.decorator';
 import { P } from '@/modules/access-control/domain/permission-catalog';
+import { resolveTeamScope } from '@/shared/application/team-scope';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { collectAllPages } from '@/shared/application/export-all';
 import { activeFilters, entityName, exportUserName, pdfResponse, rangeLabel, yesNo } from '@/shared/presentation/pdf-export';
 import { processesPdf } from '@/modules/reports/application/list-pdfs';
+import { fromBody, fromParam, VisibleTo } from '@/modules/auth/presentation/visible-to.decorator';
 
 const STATE_LABEL: Record<string, string> = { REGISTERED: 'Registado', PENDING: 'Pendente', ASSIGNED: 'Atribuído', IN_PROGRESS: 'Em cobrança', FINISHED: 'Concluído', CANCELLED: 'Cancelado' };
 const CONTACT_LABEL: Record<string, string> = { attempted: 'Tentativa', answered: 'Atendido', negotiation_started: 'Negociação iniciada', no_answer: 'Sem resposta', failed: 'Falhou', pending: 'Pendente' };
@@ -92,8 +94,8 @@ export class ProcessesController {
   @ApiOperation({ summary: 'Processos com devedor, estado, responsável e facturas (sem N+1)' })
   @ApiSort(PROCESS_SORTABLE, 'createdAt:desc')
   @RequirePermissions(P.PROCESS_VIEW)
-  index(@Query() q: ProcessListQuery) {
-    return this.queries.list({ ...q, states: q.state, lastContactStatuses: q.lastContactStatus, sort: parseSort(q.sort, PROCESS_SORTABLE) });
+  index(@CurrentUser() me: AuthenticatedUser, @Query() q: ProcessListQuery) {
+    return this.queries.list({ ...q, scope: resolveTeamScope(me, P.AGENTS_VIEW_ALL), states: q.state, lastContactStatuses: q.lastContactStatus, sort: parseSort(q.sort, PROCESS_SORTABLE) });
   }
 
   @Get('export/pdf')
@@ -101,7 +103,7 @@ export class ProcessesController {
   @RequirePermissions(P.PROCESS_VIEW)
   async exportPdf(@CurrentUser() me: AuthenticatedUser, @Query() q: ProcessListQuery) {
     const sort = parseSort(q.sort, PROCESS_SORTABLE);
-    const all = await collectAllPages((page, perPage) => this.queries.list({ ...q, states: q.state, lastContactStatuses: q.lastContactStatus, sort, page, perPage }));
+    const all = await collectAllPages((page, perPage) => this.queries.list({ ...q, scope: resolveTeamScope(me, P.AGENTS_VIEW_ALL), states: q.state, lastContactStatuses: q.lastContactStatus, sort, page, perPage }));
     const filters = activeFilters([
       ['Pesquisa', q.search], ['Estado', q.state?.length ? q.state.map((x) => STATE_LABEL[x] ?? x).join(', ') : null],
       ['Devedor', await entityName(this.ds, 'debtors', q.debtorId)], ['Agente', await entityName(this.ds, 'users', q.assignedUserId)],
@@ -113,6 +115,7 @@ export class ProcessesController {
     return pdfResponse(processesPdf(all.rows, { generatedBy: await exportUserName(this.ds, me), filters, total: all.total, truncated: all.truncated }), 'processos');
   }
 
+  @VisibleTo('process', fromBody('processeId'))
   @Post('assgin_user')
   @HttpCode(200)
   @RequirePermissions(P.PROCESS_ASSIGN)
@@ -130,18 +133,21 @@ export class ProcessesController {
     return { message: `${count} processo(s) atribuídos`, count };
   }
 
+  @VisibleTo('agent', fromParam('userId'))
   @Get('user/:userId')
   @RequirePermissions(P.PROCESS_VIEW)
   assignedTo(@Param('userId', IdPipe) userId: number, @Query() q: PaginationQueryDto) {
     return this.queries.assignedTo(userId, q);
   }
 
+  @VisibleTo('agent', fromParam('userId'))
   @Get('waller/user/:userId')
   @RequirePermissions(P.WALLET_VIEW)
   wallet(@Param('userId', IdPipe) userId: number, @Query() q: PaginationQueryDto) {
     return this.queries.assignedTo(userId, q);
   }
 
+  @VisibleTo('process', fromBody('processId'))
   @Post('remove/invoice')
   @HttpCode(200)
   @Idempotent({ required: false })
@@ -152,12 +158,14 @@ export class ProcessesController {
     return { message: `${n} factura(s) removida(s) do processo`, count: n };
   }
 
+  @VisibleTo('process', fromParam('processId'))
   @Get('invoces/process/:processId')
   @RequirePermissions(P.PROCESS_VIEW)
   invoices(@Param('processId', IdPipe) processId: number, @Query() q: PaginationQueryDto) {
     return this.queries.invoicesOf(processId, q);
   }
 
+  @VisibleTo('process', fromBody('processes', 'processId'))
   @Post('transfere')
   @HttpCode(200)
   @Idempotent()
@@ -184,6 +192,7 @@ export class ProcessesController {
 export class ContactsController {
   constructor(private readonly createContact: CreateContactUseCase, private readonly history: ContactHistoryUseCase) {}
 
+  @VisibleTo('process', fromBody('processe_id'))
   @Post()
   @ApiOperation({ summary: 'Registar um contacto/tentativa no histórico do processo (vários por processo)' })
   @RequirePermissions(P.CONTACT_REGISTER)
@@ -192,19 +201,20 @@ export class ContactsController {
     return { message: 'Contacto registado com sucesso', id };
   }
 
+  @VisibleTo('process', fromParam('processId'))
   @Get('process/:processId')
   @ApiSort(CONTACT_SORTABLE, 'contactedAt:desc')
   @ApiOperation({ summary: 'Histórico de contactos de um processo (mais recente primeiro)' })
   @RequirePermissions(P.PROCESS_VIEW)
-  byProcess(@Param('processId', IdPipe) processId: number, @Query() q: ContactHistoryQueryDto) {
-    return this.history.execute({ ...q, processId, statuses: q.status, sort: parseSort(q.sort, CONTACT_SORTABLE) });
+  byProcess(@CurrentUser() me: AuthenticatedUser, @Param('processId', IdPipe) processId: number, @Query() q: ContactHistoryQueryDto) {
+    return this.history.execute({ ...q, scope: resolveTeamScope(me, P.AGENTS_VIEW_ALL), processId, statuses: q.status, sort: parseSort(q.sort, CONTACT_SORTABLE) });
   }
 
   @Get()
   @ApiSort(CONTACT_SORTABLE, 'contactedAt:desc')
   @ApiOperation({ summary: 'Contactos com filtros (ex.: produtividade de um agente: ?userId=&from=&to=)' })
   @RequirePermissions(P.PROCESS_VIEW)
-  list(@Query() q: ContactHistoryQueryDto) {
-    return this.history.execute({ ...q, statuses: q.status, sort: parseSort(q.sort, CONTACT_SORTABLE) });
+  list(@CurrentUser() me: AuthenticatedUser, @Query() q: ContactHistoryQueryDto) {
+    return this.history.execute({ ...q, scope: resolveTeamScope(me, P.AGENTS_VIEW_ALL), statuses: q.status, sort: parseSort(q.sort, CONTACT_SORTABLE) });
   }
 }

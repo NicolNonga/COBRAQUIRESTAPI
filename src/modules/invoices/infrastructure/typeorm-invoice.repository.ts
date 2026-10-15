@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { invoiceVisibleSql, scopeValue } from '@/infrastructure/database/visibility.sql';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { BaseTypeOrmRepository } from '@/infrastructure/database/base.repository';
@@ -146,6 +147,9 @@ export class TypeOrmInvoiceRepository extends BaseTypeOrmRepository implements I
       .leftJoinAndSelect('i.invoiceState', 'invoiceState')
       .leftJoin('i.createdBy', 'createdBy')
       .addSelect(['createdBy.id', 'createdBy.fullName', 'createdBy.email']);
+    if (criteria.scope && criteria.scope.kind !== 'ALL') {
+      qb.andWhere(invoiceVisibleSql('i.id', 'i.created_by_id', criteria.scope, ':visUser'), { visUser: scopeValue(criteria.scope) });
+    }
     const [rows, total] = await applyCriteria(qb, INVOICE_FIELDS, criteria, 'i.id').getManyAndCount();
     const today = new Date().toISOString().slice(0, 10);
     return buildPage(
