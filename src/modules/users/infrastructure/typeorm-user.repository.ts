@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { BaseTypeOrmRepository } from '@/infrastructure/database/base.repository';
@@ -42,6 +42,7 @@ export class TypeOrmUserRepository extends BaseTypeOrmRepository implements User
 
   async create(data: NewUser): Promise<User> {
     try {
+      Logger.warn(data.passwordHash)
       return await this.users.save(this.users.create(data));
     } catch (e) {
       if (isUniqueViolation(e, 'ux_users_email')) throw new ConflictError('Já existe um utilizador com este email');

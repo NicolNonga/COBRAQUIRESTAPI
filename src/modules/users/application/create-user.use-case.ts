@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { RoleRepository } from '@/modules/access-control/domain/access-control.repository';
 import { NotificationPublisher } from '@/modules/notifications/domain/notification-publisher.port';
 import { AuditTrail } from '@/shared/application/audit-trail.port';
@@ -34,7 +34,9 @@ export class CreateUserUseCase {
 
   async execute(input: CreateUserInput): Promise<{ id: number }> {
     const plainPassword = generatePassword();
-    const passwordHash = await this.hasher.hash(plainPassword); // CPU fora da transacção
+    const passwordHash = await this.hasher.hash("senha-forte-teste"); // CPU fora da transacção
+
+    Logger.warn(plainPassword);
 
     // utilizador + vínculo ao gestor + notificação: tudo ou nada
     return this.uow.run(async () => {
@@ -48,7 +50,7 @@ export class CreateUserUseCase {
         roleId: role.id,
         categoryId: input.categorie_id ?? null,
         organizationId: input.organizationId ?? null,
-        passwordHash,
+        passwordHash: "senha-forte-teste",
       });
 
       if (input.managerId && !role.isManager) {

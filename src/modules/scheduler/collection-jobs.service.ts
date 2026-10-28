@@ -110,7 +110,7 @@ export class CollectionJobsService implements OnModuleInit, OnModuleDestroy {
         if (this.running.has(name)) return this.logger.warn({ job: name }, 'Execução anterior ainda a decorrer; a saltar');
         this.running.add(name);
         try {
-          await RequestContext.run({ requestId: `job:${name}:${randomUUID()}` }, fn);
+          await RequestContext.run({ requestId: `job:${name}:${randomUUID().slice(0, 8)}` }, fn);
         } finally {
           this.running.delete(name);
         }

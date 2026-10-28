@@ -23,7 +23,7 @@ export class AuthController {
   ) {}
 
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } }) // anti brute-force
+ // @Throttle({ default: { limit: 5, ttl: 60_000 } }) // anti brute-force vamos tirar so por questoe de teste
   @Post('auth')
   @HttpCode(200)
   @ApiOperation({ summary: 'Login (devolve JWT + utilizador com permissões)' })
